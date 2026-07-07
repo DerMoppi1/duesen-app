@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1a2332">
+<title>Düsen Messprotokoll</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0f1923; --surface: #1a2840; --surface2: #213050;
+    --border: #2e4060; --accent: #4a9eff; --accent2: #2d7dd2;
+    --green: #3ecf8e; --red: #ff6b6b; --yellow: #ffd166;
+    --text: #e8edf5; --text2: #8a9bb5; --radius: 10px;
+  }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; padding-bottom: 80px; }
+
+  /* HEADER */
+  header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 16px; display: flex; align-items: center; justify-content: space-between; position: sticky; top: 0; z-index: 100; }
+  .header-left { display: flex; align-items: center; gap: 10px; }
+  .app-logo { width: 34px; height: 34px; background: var(--accent); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; overflow: hidden; flex-shrink: 0; }
+  .app-logo img { width: 100%; height: 100%; object-fit: contain; }
+  header h1 { font-size: 16px; font-weight: 700; }
+  header p { font-size: 11px; color: var(--text2); margin-top: 1px; }
+
+  /* NUMMER BADGE – tappable */
+  .num-badge-wrap { display: flex; align-items: center; gap: 6px; }
+  .badge { background: var(--accent); color: white; font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: 20px; cursor: pointer; user-select: none; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+  .badge:active { background: var(--accent2); }
+
+  /* NUM EDIT POPOVER */
+  #num-popover { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.6); z-index: 200; align-items: center; justify-content: center; }
+  #num-popover.show { display: flex; }
+  .popover-box { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 24px 20px; width: 280px; }
+  .popover-box h3 { font-size: 15px; margin-bottom: 16px; }
+  .popover-box input { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 22px; font-weight: 700; padding: 10px; text-align: center; margin-bottom: 14px; -moz-appearance: textfield; }
+  .popover-box input::-webkit-inner-spin-button { -webkit-appearance: none; }
+  .popover-box input:focus { outline: none; border-color: var(--accent); }
+  .popover-actions { display: flex; gap: 10px; }
+  .popover-actions button { flex: 1; padding: 12px; border-radius: var(--radius); font-size: 14px; font-weight: 700; cursor: pointer; border: none; }
+  .pop-cancel { background: var(--surface2); color: var(--text2); }
+  .pop-ok { background: var(--accent); color: white; }
+
+  /* NAV TABS */
+  .nav-tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); }
+  .nav-tab { flex: 1; padding: 12px 8px; text-align: center; font-size: 13px; font-weight: 600; color: var(--text2); cursor: pointer; border-bottom: 2px solid transparent; transition: all 0.2s; }
+  .nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  main { padding: 16px; max-width: 600px; margin: 0 auto; }
+
+  /* CARDS */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; margin-bottom: 14px; }
+  .card-title { font-size: 11px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px; }
+
+  /* MEASURE ROW */
+  .measure-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .measure-group { display: flex; flex-direction: column; gap: 5px; }
+  .measure-label { font-size: 11px; color: var(--text2); font-weight: 600; }
+  .nenn-wrapper { display: flex; align-items: center; }
+  .btn-step { width: 32px; height: 38px; background: var(--surface2); border: 1px solid var(--border); color: var(--text); font-size: 16px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; flex-shrink: 0; transition: background 0.15s; -webkit-tap-highlight-color: transparent; }
+  .btn-step:first-child { border-radius: var(--radius) 0 0 var(--radius); }
+  .btn-step:last-child  { border-radius: 0 var(--radius) var(--radius) 0; }
+  .btn-step:active { background: var(--accent); }
+
+  input[type="number"], input[type="text"] { flex: 1; background: var(--surface2); border: 1px solid var(--border); border-left: none; border-right: none; color: var(--text); font-size: 15px; font-weight: 600; padding: 0 6px; height: 38px; text-align: center; width: 100%; -moz-appearance: textfield; }
+  input[type="number"]::-webkit-inner-spin-button, input[type="number"]::-webkit-outer-spin-button { -webkit-appearance: none; }
+  input[type="number"]:focus, input[type="text"]:focus { outline: none; border-color: var(--accent); background: #1e3050; }
+
+  .ist-input { border-radius: var(--radius); border: 1px solid var(--border) !important; border-left: 1px solid var(--border) !important; border-right: 1px solid var(--border) !important; }
+  .ist-input:focus { border-color: var(--accent) !important; }
+
+  .deviation { font-size: 11px; text-align: right; min-height: 14px; margin-top: 2px; }
+  .deviation.ok    { color: var(--green); }
+  .deviation.warn  { color: var(--yellow); }
+  .deviation.error { color: var(--red); }
+
+  .radien-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .section-sep { height: 1px; background: var(--border); margin: 12px 0; }
+
+  /* BUTTONS */
+  .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 13px 20px; border: none; border-radius: var(--radius); font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.15s; -webkit-tap-highlight-color: transparent; }
+  .btn-primary { background: var(--accent); color: white; width: 100%; }
+  .btn-primary:active { background: var(--accent2); transform: scale(0.98); }
+  .btn-danger { background: transparent; color: var(--red); border: 1px solid var(--red); font-size: 13px; padding: 8px 14px; }
+  .btn-pdf { background: #c0392b; color: white; font-size: 13px; padding: 8px 14px; }
+
+  /* SETTINGS TAB */
+  .settings-row { display: flex; align-items: center; justify-content: space-between; padding: 12px 0; border-bottom: 1px solid var(--border); }
+  .settings-row:last-child { border-bottom: none; }
+  .settings-label { font-size: 13px; font-weight: 600; }
+  .settings-sub { font-size: 11px; color: var(--text2); margin-top: 2px; }
+
+  /* LOGO UPLOAD */
+  .logo-upload-area { border: 2px dashed var(--border); border-radius: var(--radius); padding: 20px; text-align: center; cursor: pointer; transition: border-color 0.2s; margin-top: 10px; }
+  .logo-upload-area:hover { border-color: var(--accent); }
+  .logo-upload-area input { display: none; }
+  .logo-preview { max-height: 60px; max-width: 160px; border-radius: 6px; margin-top: 8px; }
+  .logo-clear { margin-top: 8px; background: transparent; border: 1px solid var(--red); color: var(--red); padding: 5px 12px; border-radius: 6px; font-size: 12px; cursor: pointer; }
+
+  /* HISTORY */
+  .history-item { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px; margin-bottom: 10px; }
+  .history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .history-num { font-size: 14px; font-weight: 700; color: var(--accent); }
+  .history-date { font-size: 11px; color: var(--text2); }
+  .history-dims { font-size: 13px; color: var(--text); margin-bottom: 6px; }
+  .history-dims span { color: var(--text2); font-size: 11px; }
+  .history-actions { display: flex; gap: 8px; margin-top: 10px; }
+
+  .status-pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; margin-left: 6px; }
+  .pill-ok    { background: rgba(62,207,142,0.15); color: var(--green); }
+  .pill-warn  { background: rgba(255,209,102,0.15); color: var(--yellow); }
+  .pill-error { background: rgba(255,107,107,0.15); color: var(--red); }
+
+  .empty { text-align: center; padding: 40px 20px; color: var(--text2); }
+  .empty .icon { font-size: 40px; margin-bottom: 12px; }
+
+  .input-standalone { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); font-size: 15px; padding: 10px 14px; width: 100%; }
+
+  /* TOAST */
+  #toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(20px); background: var(--green); color: #0a1a10; font-weight: 700; font-size: 14px; padding: 12px 22px; border-radius: 30px; opacity: 0; transition: all 0.3s; z-index: 999; white-space: nowrap; }
+  #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* BOTTOM NAV */
+  .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: var(--surface); border-top: 1px solid var(--border); display: flex; padding: 8px 0 12px; z-index: 100; }
+  .bottom-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; cursor: pointer; padding: 4px 0; color: var(--text2); font-size: 10px; font-weight: 600; -webkit-tap-highlight-color: transparent; }
+  .bottom-item.active { color: var(--accent); }
+  .bottom-item .icon { font-size: 20px; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <div class="app-logo" id="header-logo">🎯</div>
+    <div>
+      <h1>Düsen Messprotokoll</h1>
+      <p id="header-sub">Keyence IM 7020</p>
+    </div>
+  </div>
+  <div class="num-badge-wrap">
+    <div class="badge" onclick="openNumPopover()" title="Nummer ändern">
+      #<span id="duese-num-display">1</span> ✎
+    </div>
+  </div>
+</header>
+
+<!-- NUM EDIT POPOVER -->
+<div id="num-popover">
+  <div class="popover-box">
+    <h3>✎ Düsen-Nummer setzen</h3>
+    <input type="number" id="num-input" min="1" value="1">
+    <div class="popover-actions">
+      <button class="pop-cancel" onclick="closeNumPopover()">Abbrechen</button>
+      <button class="pop-ok" onclick="applyNum()">Übernehmen</button>
+    </div>
+  </div>
+</div>
+
+<div class="nav-tabs">
+  <div class="nav-tab active" onclick="showTab('erfassung')" id="tab-erfassung">Erfassung</div>
+  <div class="nav-tab" onclick="showTab('verlauf')"   id="tab-verlauf">Verlauf</div>
+  <div class="nav-tab" onclick="showTab('einstellungen')" id="tab-einstellungen">⚙ Einst.</div>
+</div>
+
+<!-- ═══ ERFASSUNG ═══ -->
+<main id="view-erfassung">
+  <div class="card">
+    <div class="card-title">Auftrag / Charge (optional)</div>
+    <input type="text" class="input-standalone" id="charge" placeholder="z. B. Charge-2024-001">
+  </div>
+
+  <div class="card">
+    <div class="card-title">Längen</div>
+    <div style="margin-bottom:12px;">
+      <div class="measure-row">
+        <div class="measure-group">
+          <div class="measure-label">L1 – Nennmaß</div>
+          <div class="nenn-wrapper">
+            <button class="btn-step" onclick="step('nenn_l1',-0.005)">−</button>
+            <input type="number" id="nenn_l1" step="0.001" value="1.685" oninput="calcDev('l1')">
+            <button class="btn-step" onclick="step('nenn_l1',0.005)">+</button>
+          </div>
+        </div>
+        <div class="measure-group">
+          <div class="measure-label">L1 – Ist-Maß</div>
+          <input type="number" class="ist-input" id="ist_l1" step="0.001" placeholder="0.000" inputmode="decimal" enterkeyhint="next" oninput="calcDev('l1')" onkeydown="jumpTo(event,'ist_l2')">
+        </div>
+      </div>
+      <div class="deviation" id="dev_l1"></div>
+    </div>
+    <div class="section-sep"></div>
+    <div>
+      <div class="measure-row">
+        <div class="measure-group">
+          <div class="measure-label">L2 – Nennmaß</div>
+          <div class="nenn-wrapper">
+            <button class="btn-step" onclick="step('nenn_l2',-0.005)">−</button>
+            <input type="number" id="nenn_l2" step="0.001" value="3.430" oninput="calcDev('l2')">
+            <button class="btn-step" onclick="step('nenn_l2',0.005)">+</button>
+          </div>
+        </div>
+        <div class="measure-group">
+          <div class="measure-label">L2 – Ist-Maß</div>
+          <input type="number" class="ist-input" id="ist_l2" step="0.001" placeholder="0.000" inputmode="decimal" enterkeyhint="next" oninput="calcDev('l2')" onkeydown="jumpTo(event,'ist_r1')">
+        </div>
+      </div>
+      <div class="deviation" id="dev_l2"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Eckenradien</div>
+    <div style="margin-bottom:14px;">
+      <div class="measure-label" style="margin-bottom:6px;">R – Nennmaß (für alle Radien)</div>
+      <div class="nenn-wrapper" style="max-width:200px;">
+        <button class="btn-step" onclick="step('nenn_r',-0.005)">−</button>
+        <input type="number" id="nenn_r" step="0.001" value="0.340" oninput="calcAllR()">
+        <button class="btn-step" onclick="step('nenn_r',0.005)">+</button>
+      </div>
+    </div>
+    <div class="section-sep"></div>
+    <div class="radien-grid">
+      <div>
+        <div class="measure-label">R1 – Ist-Maß</div>
+        <input type="number" class="ist-input" id="ist_r1" step="0.001" placeholder="0.000" inputmode="decimal" enterkeyhint="next" oninput="calcDev('r1')" onkeydown="jumpTo(event,'ist_r2')" style="margin-top:5px;">
+        <div class="deviation" id="dev_r1"></div>
+      </div>
+      <div>
+        <div class="measure-label">R2 – Ist-Maß</div>
+        <input type="number" class="ist-input" id="ist_r2" step="0.001" placeholder="0.000" inputmode="decimal" enterkeyhint="next" oninput="calcDev('r2')" onkeydown="jumpTo(event,'ist_r3')" style="margin-top:5px;">
+        <div class="deviation" id="dev_r2"></div>
+      </div>
+      <div>
+        <div class="measure-label">R3 – Ist-Maß</div>
+        <input type="number" class="ist-input" id="ist_r3" step="0.001" placeholder="0.000" inputmode="decimal" enterkeyhint="next" oninput="calcDev('r3')" onkeydown="jumpTo(event,'ist_r4')" style="margin-top:5px;">
+        <div class="deviation" id="dev_r3"></div>
+      </div>
+      <div>
+        <div class="measure-label">R4 – Ist-Maß</div>
+        <input type="number" class="ist-input" id="ist_r4" step="0.001" placeholder="0.000" inputmode="decimal" enterkeyhint="done" oninput="calcDev('r4')" onkeydown="jumpTo(event,null)" style="margin-top:5px;">
+        <div class="deviation" id="dev_r4"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Notiz (optional)</div>
+    <input type="text" class="input-standalone" id="notiz" placeholder="z. B. leichte Abweichung an Ecke 3">
+  </div>
+
+  <button class="btn btn-primary" onclick="saveDuese()">💾 &nbsp;Düse speichern &amp; nächste →</button>
+</main>
+
+<!-- ═══ VERLAUF ═══ -->
+<main id="view-verlauf" style="display:none;">
+    <div style="margin-bottom:14px;">
+    <button class="btn btn-primary" onclick="sendSerieEmail()" style="background:#2d7dd2;">
+      📧 &nbsp;Aktuelle Serie per E-Mail senden
+    </button>
+  </div>
+<div id="verlauf-list"></div>
+</main>
+
+<!-- ═══ EINSTELLUNGEN ═══ -->
+<main id="view-einstellungen" style="display:none;">
+  <div class="card">
+    <div class="card-title">Düsen-Nummer</div>
+    <div class="settings-row">
+      <div>
+        <div class="settings-label">Nächste Nummer</div>
+        <div class="settings-sub">Setzt die Startnummer für den nächsten Satz</div>
+      </div>
+      <div class="badge" onclick="openNumPopover()" style="margin-left:12px;">#<span id="duese-num-display2">1</span> ✎</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">E-Mail für Serienversand</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:10px;">Diese Adresse wird beim Serienversand als Empfänger eingetragen.</p>
+    <input type="email" class="input-standalone" id="setting-email" placeholder="empfaenger@firma.de" oninput="saveEmail()">
+  </div>
+
+  <div class="card">
+    <div class="card-title">Firmen-Logo für PDF</div>
+    <p style="font-size:13px;color:var(--text2);margin-bottom:12px;">Das Logo erscheint oben rechts in jedem PDF-Protokoll. Es wird lokal gespeichert und bleibt nach Neustart erhalten.</p>
+    <div class="logo-upload-area" onclick="document.getElementById('logo-file').click()">
+      <input type="file" id="logo-file" accept="image/*" onchange="uploadLogo(event)">
+      <div id="logo-placeholder">
+        <div style="font-size:28px;margin-bottom:6px;">🖼</div>
+        <div style="font-size:13px;color:var(--text2);">Tippen zum Logo auswählen<br><span style="font-size:11px;">PNG, JPG, SVG</span></div>
+      </div>
+      <div id="logo-preview-wrap" style="display:none;">
+        <img id="logo-preview-img" class="logo-preview">
+        <div style="font-size:11px;color:var(--green);margin-top:6px;">✓ Logo gespeichert</div>
+      </div>
+    </div>
+    <button class="logo-clear" id="logo-clear-btn" style="display:none;" onclick="clearLogo()">✕ Logo entfernen</button>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Daten</div>
+    <div class="settings-row">
+      <div>
+        <div class="settings-label">Alle Einträge löschen</div>
+        <div class="settings-sub">Verlauf komplett zurücksetzen</div>
+      </div>
+      <button class="btn btn-danger" onclick="clearAll()" style="flex-shrink:0;">Löschen</button>
+    </div>
+  </div>
+</main>
+
+<div id="toast">✓ Gespeichert</div>
+
+<nav class="bottom-bar">
+  <div class="bottom-item active" id="nav-erfassung" onclick="showTab('erfassung')">
+    <span class="icon">✏️</span>Erfassung
+  </div>
+  <div class="bottom-item" id="nav-verlauf" onclick="showTab('verlauf')">
+    <span class="icon">📋</span>Verlauf
+  </div>
+  <div class="bottom-item" id="nav-einstellungen" onclick="showTab('einstellungen')">
+    <span class="icon">⚙️</span>Einst.
+  </div>
+</nav>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────
+const STORAGE_KEY = 'duesen_data_v3';
+let records = [];
+let currentNum = 1;
+let logoDataUrl = null;
+let emailAdresse = '';
+
+function load() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw) {
+      const d = JSON.parse(raw);
+      records    = d.records    || [];
+      currentNum = d.currentNum || (records.length + 1);
+      logoDataUrl= d.logo       || null;
+      emailAdresse = d.email || '';
+    }
+  } catch(e) {}
+  updateBadge();
+  updateLogoUI();
+}
+
+function saveEmail() {
+  emailAdresse = document.getElementById('setting-email').value.trim();
+  save();
+}
+
+function save() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, currentNum, logo: logoDataUrl, email: emailAdresse }));
+}
+
+// ── UI ─────────────────────────────────────────────────────────────────
+function showTab(tab) {
+  ['erfassung','verlauf','einstellungen'].forEach(t => {
+    document.getElementById('view-' + t).style.display = t === tab ? 'block' : 'none';
+    document.getElementById('tab-' + t).className = 'nav-tab' + (t === tab ? ' active' : '');
+    document.getElementById('nav-' + t).className  = 'bottom-item' + (t === tab ? ' active' : '');
+  });
+  if (tab === 'verlauf') renderVerlauf();
+  if (tab === 'einstellungen') {
+    document.getElementById('duese-num-display2').textContent = currentNum;
+    document.getElementById('setting-email').value = emailAdresse;
+  }
+}
+
+function updateBadge() {
+  document.getElementById('duese-num-display').textContent = currentNum;
+  if (document.getElementById('duese-num-display2'))
+    document.getElementById('duese-num-display2').textContent = currentNum;
+  document.getElementById('header-sub').textContent = 'Düse ' + currentNum + ' – Keyence IM 7020';
+}
+
+function showToast(msg, color) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.background = color || 'var(--green)';
+  t.style.color = color ? 'white' : '#0a1a10';
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2400);
+}
+
+// ── NUM POPOVER ────────────────────────────────────────────────────────
+function openNumPopover() {
+  document.getElementById('num-input').value = currentNum;
+  document.getElementById('num-popover').classList.add('show');
+  setTimeout(() => document.getElementById('num-input').focus(), 100);
+}
+function closeNumPopover() {
+  document.getElementById('num-popover').classList.remove('show');
+}
+function applyNum() {
+  const v = parseInt(document.getElementById('num-input').value);
+  if (isNaN(v) || v < 1) { showToast('⚠ Ungültige Nummer', '#e67e22'); return; }
+  currentNum = v;
+  save();
+  updateBadge();
+  closeNumPopover();
+  showToast('✓ Nummer auf #' + v + ' gesetzt');
+}
+document.getElementById('num-popover').addEventListener('click', function(e) {
+  if (e.target === this) closeNumPopover();
+});
+
+// ── STEP / DEVIATION ──────────────────────────────────────────────────
+function round3(v) { return Math.round(v * 1000) / 1000; }
+
+function step(id, delta) {
+  const el = document.getElementById(id);
+  el.value = round3((parseFloat(el.value) || 0) + delta);
+  if (id === 'nenn_r') calcAllR();
+  else if (id === 'nenn_l1') calcDev('l1');
+  else if (id === 'nenn_l2') calcDev('l2');
+}
+
+function calcDev(key) {
+  const map = {
+    l1: { nenn:'nenn_l1', ist:'ist_l1', dev:'dev_l1' },
+    l2: { nenn:'nenn_l2', ist:'ist_l2', dev:'dev_l2' },
+    r1: { nenn:'nenn_r',  ist:'ist_r1', dev:'dev_r1' },
+    r2: { nenn:'nenn_r',  ist:'ist_r2', dev:'dev_r2' },
+    r3: { nenn:'nenn_r',  ist:'ist_r3', dev:'dev_r3' },
+    r4: { nenn:'nenn_r',  ist:'ist_r4', dev:'dev_r4' },
+  };
+  const m = map[key];
+  const nenn = parseFloat(document.getElementById(m.nenn).value);
+  const ist  = parseFloat(document.getElementById(m.ist).value);
+  const el   = document.getElementById(m.dev);
+  if (isNaN(ist) || isNaN(nenn)) { el.textContent=''; el.className='deviation'; return; }
+  const diff = round3(ist - nenn);
+  const sign = diff >= 0 ? '+' : '';
+  const abs  = Math.abs(diff);
+  let cls = 'ok', label = 'OK';
+  if (abs > 0.010)      { cls = 'error'; label = 'GRENZWERTIG'; }
+  else if (abs > 0.005) { cls = 'warn';  label = 'ACHTUNG'; }
+  el.textContent = `Δ ${sign}${diff.toFixed(3)} mm  ·  ${label}`;
+  el.className = `deviation ${cls}`;
+}
+function calcAllR() { ['r1','r2','r3','r4'].forEach(k => calcDev(k)); }
+
+// ── LOGO ───────────────────────────────────────────────────────────────
+function uploadLogo(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    logoDataUrl = ev.target.result;
+    save();
+    updateLogoUI();
+    showToast('✓ Logo gespeichert');
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearLogo() {
+  logoDataUrl = null;
+  save();
+  updateLogoUI();
+  document.getElementById('logo-file').value = '';
+}
+
+function updateLogoUI() {
+  const headerLogo = document.getElementById('header-logo');
+  const previewWrap = document.getElementById('logo-preview-wrap');
+  const placeholder = document.getElementById('logo-placeholder');
+  const previewImg  = document.getElementById('logo-preview-img');
+  const clearBtn    = document.getElementById('logo-clear-btn');
+
+  if (logoDataUrl) {
+    // Header
+    headerLogo.innerHTML = `<img src="${logoDataUrl}" alt="Logo">`;
+    // Settings preview
+    previewImg.src = logoDataUrl;
+    previewWrap.style.display = 'block';
+    placeholder.style.display = 'none';
+    clearBtn.style.display = 'inline-block';
+  } else {
+    headerLogo.innerHTML = '🎯';
+    previewWrap.style.display = 'none';
+    placeholder.style.display = 'block';
+    clearBtn.style.display = 'none';
+  }
+}
+
+// ── SAVE ───────────────────────────────────────────────────────────────
+function getVal(id) { return parseFloat(document.getElementById(id).value) || null; }
+function getTxt(id) { return document.getElementById(id).value.trim(); }
+
+function saveDuese() {
+  const ist_l1 = getVal('ist_l1'), ist_l2 = getVal('ist_l2');
+  if (!ist_l1 || !ist_l2) { showToast('⚠ Bitte L1 und L2 eintragen!', '#e67e22'); return; }
+
+  const record = {
+    num:    currentNum,
+    datum:  new Date().toLocaleString('de-DE'),
+    charge: getTxt('charge'),
+    notiz:  getTxt('notiz'),
+    nenn_l1: getVal('nenn_l1'), nenn_l2: getVal('nenn_l2'), nenn_r: getVal('nenn_r'),
+    ist_l1, ist_l2,
+    ist_r1: getVal('ist_r1'), ist_r2: getVal('ist_r2'),
+    ist_r3: getVal('ist_r3'), ist_r4: getVal('ist_r4'),
+  };
+
+  records.push(record);
+  generatePDF(record, true);
+
+  currentNum++;
+  save();
+  updateBadge();
+
+  ['ist_l1','ist_l2','ist_r1','ist_r2','ist_r3','ist_r4'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('notiz').value = '';
+  ['l1','l2','r1','r2','r3','r4'].forEach(k => {
+    const el = document.getElementById('dev_' + k);
+    if (el) { el.textContent=''; el.className='deviation'; }
+  });
+
+  showToast('✓ Düse #' + (currentNum-1) + ' gespeichert!');
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+// ── PDF ────────────────────────────────────────────────────────────────
+function generatePDF(r, autoDownload) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation:'portrait', unit:'mm', format:'a4' });
+  const W = 210, M = 18;
+  let y = 0;
+
+  // ---- HEADER BAND ----
+  const headerH = logoDataUrl ? 34 : 28;
+  doc.setFillColor(26,40,64);
+  doc.rect(0, 0, W, headerH, 'F');
+
+  if (logoDataUrl) {
+    // Logo top-right
+    try {
+      const ext = logoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+      doc.addImage(logoDataUrl, ext, W-M-38, 4, 36, 26);
+    } catch(e) {}
+  }
+
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(15);
+  doc.setFont('helvetica','bold');
+  doc.text('DÜSEN MESSPROTOKOLL', M, 13);
+  doc.setFontSize(8.5);
+  doc.setFont('helvetica','normal');
+  doc.setTextColor(138,155,181);
+  doc.text('Keyence IM 7020', M, 21);
+
+  // Düsennummer box (left side of logo if logo present, else right)
+  const boxX = logoDataUrl ? W-M-38-38 : W-M-30;
+  const boxW = 30;
+  doc.setFillColor(74,158,255);
+  doc.roundedRect(boxX, 8, boxW, 14, 3, 3, 'F');
+  doc.setTextColor(255,255,255);
+  doc.setFontSize(13);
+  doc.setFont('helvetica','bold');
+  doc.text('# ' + r.num, boxX + boxW/2, 17.5, {align:'center'});
+
+  y = headerH + 8;
+
+  // ---- META ROW ----
+  doc.setFillColor(241,244,250);
+  doc.rect(M, y, W-2*M, 22, 'F');
+  doc.setTextColor(40,60,90);
+  doc.setFontSize(8);
+  doc.setFont('helvetica','bold');
+  doc.text('DATUM', M+4, y+7);
+  doc.text('CHARGE / AUFTRAG', M+70, y+7);
+  doc.setFont('helvetica','normal');
+  doc.setTextColor(20,20,20);
+  doc.setFontSize(9);
+  doc.text(r.datum, M+4, y+15);
+  doc.text(r.charge || '—', M+70, y+15);
+  y += 28;
+
+  // ---- TABLE HELPERS ----
+  function colHead() {
+    doc.setFillColor(233,238,248);
+    doc.rect(M, y, W-2*M, 7, 'F');
+    doc.setTextColor(80,100,130);
+    doc.setFontSize(7.5);
+    doc.setFont('helvetica','bold');
+    doc.text('MESSGRÖSSE', M+3, y+5);
+    doc.text('NENNMASS',   M+52, y+5);
+    doc.text('IST-MASS',   M+90, y+5);
+    doc.text('ABWEICHUNG', M+128, y+5);
+    doc.text('STATUS', W-M-14, y+5, {align:'center'});
+    y += 7;
+  }
+
+  function sectionHead(title) {
+    doc.setFillColor(26,40,64);
+    doc.rect(M, y, W-2*M, 8, 'F');
+    doc.setTextColor(255,255,255);
+    doc.setFontSize(8);
+    doc.setFont('helvetica','bold');
+    doc.text(title, M+3, y+5.5);
+    y += 8;
+  }
+
+  function tableRow(label, nenn, ist, even) {
+    const diff = (ist !== null && nenn !== null) ? round3(ist - nenn) : null;
+    let sc = [62,207,142], sl = 'OK';
+    if (diff !== null) {
+      const a = Math.abs(diff);
+      if (a > 0.010)      { sc=[220,80,80];  sl='GRENZWERTIG'; }
+      else if (a > 0.005) { sc=[230,160,0];  sl='ACHTUNG'; }
+    }
+    if (even) { doc.setFillColor(248,250,254); doc.rect(M, y, W-2*M, 9, 'F'); }
+    doc.setTextColor(40,40,60);
+    doc.setFontSize(9);
+    doc.setFont('helvetica','bold');
+    doc.text(label, M+3, y+6);
+    doc.setFont('helvetica','normal');
+    doc.text(nenn !== null ? nenn.toFixed(3)+' mm' : '—', M+52, y+6);
+    doc.text(ist  !== null ? ist.toFixed(3) +' mm' : '—', M+90, y+6);
+    if (diff !== null) {
+      const sign = diff >= 0 ? '+' : '';
+      doc.text(sign+diff.toFixed(3)+' mm', M+128, y+6);
+      doc.setFillColor(...sc);
+      doc.roundedRect(W-M-28, y+1.5, 28, 6, 2, 2, 'F');
+      doc.setTextColor(255,255,255);
+      doc.setFontSize(7);
+      doc.setFont('helvetica','bold');
+      doc.text(sl, W-M-14, y+6, {align:'center'});
+    }
+    y += 9;
+  }
+
+  colHead();
+  sectionHead('LÄNGEN');
+  tableRow('L1', r.nenn_l1, r.ist_l1, false);
+  tableRow('L2', r.nenn_l2, r.ist_l2, true);
+  y += 4;
+
+  colHead();
+  sectionHead('ECKENRADIEN');
+  tableRow('R1', r.nenn_r, r.ist_r1, false);
+  tableRow('R2', r.nenn_r, r.ist_r2, true);
+  tableRow('R3', r.nenn_r, r.ist_r3, false);
+  tableRow('R4', r.nenn_r, r.ist_r4, true);
+  y += 4;
+
+  if (r.notiz) {
+    doc.setFillColor(255,250,225);
+    doc.rect(M, y, W-2*M, 15, 'F');
+    doc.setTextColor(120,90,0); doc.setFontSize(8); doc.setFont('helvetica','bold');
+    doc.text('NOTIZ', M+3, y+6);
+    doc.setFont('helvetica','normal'); doc.setTextColor(40,30,0); doc.setFontSize(9);
+    doc.text(r.notiz, M+3, y+12);
+    y += 18;
+  }
+
+  // FOOTER
+  doc.setFillColor(26,40,64);
+  doc.rect(0, 285, W, 12, 'F');
+  doc.setTextColor(138,155,181); doc.setFontSize(7.5); doc.setFont('helvetica','normal');
+  doc.text('Düse #'+r.num+'  ·  '+r.datum, M, 293);
+  doc.text('Seite 1 / 1', W-M, 293, {align:'right'});
+
+  if (autoDownload) doc.save('Duese_'+String(r.num).padStart(4,'0')+'.pdf');
+  return doc;
+}
+
+// ── VERLAUF ────────────────────────────────────────────────────────────
+function renderVerlauf() {
+  const el = document.getElementById('verlauf-list');
+  if (!records.length) {
+    el.innerHTML = '<div class="empty"><div class="icon">📭</div><p>Noch keine Düsen erfasst.</p></div>';
+    return;
+  }
+  el.innerHTML = [...records].reverse().map(r => {
+    const devs = [
+      {nenn:r.nenn_l1,ist:r.ist_l1},{nenn:r.nenn_l2,ist:r.ist_l2},
+      {nenn:r.nenn_r,ist:r.ist_r1},{nenn:r.nenn_r,ist:r.ist_r2},
+      {nenn:r.nenn_r,ist:r.ist_r3},{nenn:r.nenn_r,ist:r.ist_r4},
+    ].map(d => d.ist&&d.nenn ? Math.abs(round3(d.ist-d.nenn)) : 0);
+    const mx = Math.max(...devs);
+    let pill = '<span class="status-pill pill-ok">OK</span>';
+    if (mx > 0.010) pill = '<span class="status-pill pill-error">GRENZWERTIG</span>';
+    else if (mx > 0.005) pill = '<span class="status-pill pill-warn">ACHTUNG</span>';
+    return `<div class="history-item">
+      <div class="history-header">
+        <div><span class="history-num">Düse #${r.num}</span>${pill}</div>
+        <div class="history-date">${r.datum}</div>
+      </div>
+      <div class="history-dims">
+        <span>Nenn</span> L1 ${r.nenn_l1?.toFixed(3)} × L2 ${r.nenn_l2?.toFixed(3)} · R ${r.nenn_r?.toFixed(3)}<br>
+        <span>Ist&nbsp;</span> L1 ${r.ist_l1?.toFixed(3)??'—'} × L2 ${r.ist_l2?.toFixed(3)??'—'} · R1 ${r.ist_r1?.toFixed(3)??'—'} R2 ${r.ist_r2?.toFixed(3)??'—'} R3 ${r.ist_r3?.toFixed(3)??'—'} R4 ${r.ist_r4?.toFixed(3)??'—'}
+      </div>
+      ${r.charge?`<div style="font-size:11px;color:var(--text2)">Charge: ${r.charge}</div>`:''}
+      ${r.notiz ?`<div style="font-size:11px;color:var(--yellow);margin-top:3px">⚠ ${r.notiz}</div>`:''}
+      <div class="history-actions">
+        <button class="btn btn-pdf" onclick="generatePDF(records.find(x=>x.num===${r.num}),true)">📄 PDF</button>
+        <button class="btn btn-danger" onclick="deleteRecord(${r.num})">🗑 Löschen</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function deleteRecord(num) {
+  if (!confirm('Düse #'+num+' wirklich löschen?')) return;
+  records = records.filter(r => r.num !== num);
+  save(); renderVerlauf();
+}
+
+function clearAll() {
+  if (!confirm('Wirklich ALLE Einträge löschen? Das kann nicht rückgängig gemacht werden.')) return;
+  records = [];
+  currentNum = 1;
+  save(); updateBadge();
+  showToast('Alle Daten gelöscht', '#e74c3c');
+}
+
+// ── SERVICE WORKER ─────────────────────────────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
+}
+
+// ── SERIE EMAIL ────────────────────────────────────────────────────────
+function sendSerieEmail() {
+  if (!records.length) { showToast('⚠ Keine Einträge vorhanden', '#e67e22'); return; }
+
+  const charge = records[records.length-1].charge || '';
+  const serie = charge
+    ? records.filter(r => r.charge === charge)
+    : records;
+
+  if (!serie.length) { showToast('⚠ Keine Einträge gefunden', '#e67e22'); return; }
+
+  const to = emailAdresse || '';
+  const betreff = encodeURIComponent('Düsen Messprotokoll' + (charge ? ' – ' + charge : '') + ' (' + serie.length + ' Düsen)');
+
+  // Build summary text for email body
+  let body = 'Düsen Messprotokoll\n';
+  body += '══════════════════════════════\n';
+  if (charge) body += 'Charge / Auftrag: ' + charge + '\n';
+  body += 'Anzahl Düsen: ' + serie.length + '\n';
+  body += 'Erstellt: ' + new Date().toLocaleString('de-DE') + '\n\n';
+
+  serie.forEach(r => {
+    const devL1 = r.ist_l1 && r.nenn_l1 ? round3(r.ist_l1 - r.nenn_l1) : null;
+    const devL2 = r.ist_l2 && r.nenn_l2 ? round3(r.ist_l2 - r.nenn_l2) : null;
+    const devs = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4].map(v => v && r.nenn_r ? Math.abs(round3(v-r.nenn_r)) : 0);
+    const maxDev = Math.max(devL1?Math.abs(devL1):0, devL2?Math.abs(devL2):0, ...devs);
+    const status = maxDev > 0.010 ? 'GRENZWERTIG' : maxDev > 0.005 ? 'ACHTUNG' : 'OK';
+
+    body += '──────────────────────────────\n';
+    body += 'Düse #' + r.num + '  [' + status + ']\n';
+    body += 'L1: ' + (r.nenn_l1||'?').toFixed(3) + ' / ' + (r.ist_l1||'?').toFixed(3) + ' mm';
+    if (devL1 !== null) body += '  (Δ' + (devL1>=0?'+':'') + devL1.toFixed(3) + ')';
+    body += '\n';
+    body += 'L2: ' + (r.nenn_l2||'?').toFixed(3) + ' / ' + (r.ist_l2||'?').toFixed(3) + ' mm';
+    if (devL2 !== null) body += '  (Δ' + (devL2>=0?'+':'') + devL2.toFixed(3) + ')';
+    body += '\n';
+    body += 'R (Nenn ' + (r.nenn_r||'?').toFixed(3) + '): ';
+    body += ['R1','R2','R3','R4'].map((n,i) => {
+      const v = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4][i];
+      if (!v) return n+'=—';
+      const d = round3(v - r.nenn_r);
+      return n+'='+v.toFixed(3)+'(Δ'+(d>=0?'+':'')+d.toFixed(3)+')';
+    }).join('  ') + '\n';
+    if (r.notiz) body += 'Notiz: ' + r.notiz + '\n';
+    body += 'Datum: ' + r.datum + '\n';
+  });
+
+  body += '══════════════════════════════\n';
+  body += 'Hinweis: PDFs wurden beim Speichern automatisch heruntergeladen.\n';
+  body += 'Gerät: Keyence IM 7020';
+
+  const mailto = 'mailto:' + to + '?subject=' + betreff + '&body=' + encodeURIComponent(body);
+
+  if (mailto.length > 2000) {
+    // Too long for mailto – open without body, show warning
+    showToast('⚠ Zu viele Einträge – E-Mail ohne Text geöffnet', '#e67e22');
+    window.location.href = 'mailto:' + to + '?subject=' + betreff;
+  } else {
+    window.location.href = mailto;
+  }
+}
+
+// ── KEYBOARD NAVIGATION ────────────────────────────────────────────────
+function jumpTo(event, nextId) {
+  if (event.key === 'Enter') {
+    event.preventDefault();
+    if (nextId) {
+      document.getElementById(nextId).focus();
+    } else {
+      document.activeElement.blur();
+      saveDuese();
+    }
+  }
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────
+load();
+</script>
+</body>
+</html>
