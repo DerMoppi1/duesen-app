@@ -302,11 +302,6 @@
     </div>
   </div>
 
-  <div class="card">
-    <div class="card-title">E-Mail für Serienversand</div>
-    <p style="font-size:13px;color:var(--text2);margin-bottom:10px;">Diese Adresse wird beim Serienversand als Empfänger eingetragen.</p>
-    <input type="email" class="input-standalone" id="setting-email" placeholder="empfaenger@firma.de" oninput="saveEmail()">
-  </div>
 
   <div class="card">
     <div class="card-title">Firmen-Logo für PDF</div>
@@ -357,7 +352,6 @@ const STORAGE_KEY = 'duesen_data_v3';
 let records = [];
 let currentNum = 1;
 let logoDataUrl = null;
-let emailAdresse = '';
 
 function load() {
   try {
@@ -367,7 +361,6 @@ function load() {
       records    = d.records    || [];
       currentNum = d.currentNum || (records.length + 1);
       logoDataUrl= d.logo       || null;
-      emailAdresse = d.email || '';
     }
   } catch(e) {}
   updateBadge();
@@ -385,13 +378,8 @@ function prefillIst() {
   ['l1','l2','r1','r2','r3','r4'].forEach(k => calcDev(k));
 }
 
-function saveEmail() {
-  emailAdresse = document.getElementById('setting-email').value.trim();
-  save();
-}
-
 function save() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, currentNum, logo: logoDataUrl, email: emailAdresse }));
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({ records, currentNum, logo: logoDataUrl }));
 }
 
 // ── UI ─────────────────────────────────────────────────────────────────
@@ -404,7 +392,6 @@ function showTab(tab) {
   if (tab === 'verlauf') renderVerlauf();
   if (tab === 'einstellungen') {
     document.getElementById('duese-num-display2').textContent = currentNum;
-    document.getElementById('setting-email').value = emailAdresse;
   }
 }
 
