@@ -283,7 +283,7 @@
 <main id="view-verlauf" style="display:none;">
     <div style="margin-bottom:14px;">
     <button class="btn btn-primary" onclick="sendSerieEmail()" style="background:#2d7dd2;">
-      📧 &nbsp;Aktuelle Serie per E-Mail senden
+      📤 &nbsp;Aktuelle Serie als PDFs teilen
     </button>
   </div>
 <div id="verlauf-list"></div>
@@ -786,50 +786,47 @@ if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
 
-// ── SERIE EMAIL ────────────────────────────────────────────────────────
-function sendSerieEmail() {
+// ── SERIE TEILEN (Web Share API mit PDF-Anhängen) ──────────────────────
+async function sendSerieEmail() {
   if (!records.length) { showToast('⚠ Keine Einträge vorhanden', '#e67e22'); return; }
 
   const charge = records[records.length-1].charge || '';
   const serie = charge ? records.filter(r => r.charge === charge) : records;
   if (!serie.length) { showToast('⚠ Keine Einträge gefunden', '#e67e22'); return; }
 
-  const to = emailAdresse || '';
-  const subjText = 'Duesen Messprotokoll' + (charge ? ' ' + charge : '') + ' (' + serie.length + ' Duesen)';
+  showToast('PDFs werden vorbereitet...', '#2d7dd2');
 
-  // Build compact plain-text body – avoid special chars that trip up mailto
-  const lines = [];
-  lines.push('Duesen Messprotokoll – Keyence IM 7020');
-  lines.push('Anzahl: ' + serie.length + (charge ? '  Charge: ' + charge : ''));
-  lines.push('');
-
-  serie.forEach(r => {
-    const dL1 = (r.ist_l1 && r.nenn_l1) ? round3(r.ist_l1 - r.nenn_l1) : null;
-    const dL2 = (r.ist_l2 && r.nenn_l2) ? round3(r.ist_l2 - r.nenn_l2) : null;
-    const rDevs = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4]
-      .map(v => (v && r.nenn_r) ? Math.abs(round3(v - r.nenn_r)) : 0);
-    const mx = Math.max(dL1?Math.abs(dL1):0, dL2?Math.abs(dL2):0, ...rDevs);
-    const st = mx > 0.010 ? 'GRENZWERTIG' : mx > 0.005 ? 'ACHTUNG' : 'OK';
-
-    lines.push('Duese #' + r.num + ' [' + st + ']');
-    lines.push('L1: ' + fmt(r.nenn_l1) + ' / ' + fmt(r.ist_l1) + (dL1!==null?' d='+(dL1>=0?'+':'')+dL1.toFixed(3):''));
-    lines.push('L2: ' + fmt(r.nenn_l2) + ' / ' + fmt(r.ist_l2) + (dL2!==null?' d='+(dL2>=0?'+':'')+dL2.toFixed(3):''));
-    const rLine = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4]
-      .map((v,i) => { if(!v) return 'R'+(i+1)+'=?'; const d=round3(v-r.nenn_r); return 'R'+(i+1)+'='+v.toFixed(3)+(d>=0?'+':'')+d.toFixed(3); })
-      .join(' ');
-    lines.push('R('+fmt(r.nenn_r)+'): ' + rLine);
-    if (r.notiz) lines.push('Notiz: ' + r.notiz);
-    lines.push('');
+  // Generate all PDFs as File objects
+  const { jsPDF } = window.jspdf;
+  const files = serie.map(r => {
+    const doc = generatePDF(r, false);
+    const blob = doc.output('blob');
+    const name = 'Duese_' + String(r.num).padStart(4,'0') + '.pdf';
+    return new File([blob], name, { type: 'application/pdf' });
   });
 
-  lines.push('PDFs wurden beim Speichern heruntergeladen.');
+  const title = 'Düsen Messprotokoll' + (charge ? ' – ' + charge : '') + ' (' + serie.length + ' Düsen)';
 
-  const body = lines.join('%0D%0A');  // pre-encode newlines – most reliable across mail apps
-  const subj = encodeURIComponent(subjText);
-  const mailto = 'mailto:' + to + '?subject=' + subj + '&body=' + body;
+  // Try Web Share API (Android Chrome supports files)
+  if (navigator.canShare && navigator.canShare({ files })) {
+    try {
+      await navigator.share({ title, files });
+      return;
+    } catch(e) {
+      if (e.name === 'AbortError') return; // user cancelled, do nothing
+    }
+  }
 
-  window.location.href = mailto;
-  showToast('Mail-App wird geoeffnet...', '#2d7dd2');
+  // Fallback: download all PDFs one by one
+  showToast('Teilen nicht verfügbar – PDFs werden heruntergeladen', '#e67e22');
+  for (const file of files) {
+    const url = URL.createObjectURL(file);
+    const a = document.createElement('a');
+    a.href = url; a.download = file.name;
+    a.click();
+    URL.revokeObjectURL(url);
+    await new Promise(res => setTimeout(res, 400));
+  }
 }
 
 function fmt(v) { return v ? v.toFixed(3) : '?'; }
