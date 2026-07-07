@@ -791,62 +791,48 @@ function sendSerieEmail() {
   if (!records.length) { showToast('⚠ Keine Einträge vorhanden', '#e67e22'); return; }
 
   const charge = records[records.length-1].charge || '';
-  const serie = charge
-    ? records.filter(r => r.charge === charge)
-    : records;
-
+  const serie = charge ? records.filter(r => r.charge === charge) : records;
   if (!serie.length) { showToast('⚠ Keine Einträge gefunden', '#e67e22'); return; }
 
   const to = emailAdresse || '';
-  const betreff = encodeURIComponent('Düsen Messprotokoll' + (charge ? ' – ' + charge : '') + ' (' + serie.length + ' Düsen)');
+  const subjText = 'Duesen Messprotokoll' + (charge ? ' ' + charge : '') + ' (' + serie.length + ' Duesen)';
 
-  // Build summary text for email body
-  let body = 'Düsen Messprotokoll\n';
-  body += '══════════════════════════════\n';
-  if (charge) body += 'Charge / Auftrag: ' + charge + '\n';
-  body += 'Anzahl Düsen: ' + serie.length + '\n';
-  body += 'Erstellt: ' + new Date().toLocaleString('de-DE') + '\n\n';
+  // Build compact plain-text body – avoid special chars that trip up mailto
+  const lines = [];
+  lines.push('Duesen Messprotokoll – Keyence IM 7020');
+  lines.push('Anzahl: ' + serie.length + (charge ? '  Charge: ' + charge : ''));
+  lines.push('');
 
   serie.forEach(r => {
-    const devL1 = r.ist_l1 && r.nenn_l1 ? round3(r.ist_l1 - r.nenn_l1) : null;
-    const devL2 = r.ist_l2 && r.nenn_l2 ? round3(r.ist_l2 - r.nenn_l2) : null;
-    const devs = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4].map(v => v && r.nenn_r ? Math.abs(round3(v-r.nenn_r)) : 0);
-    const maxDev = Math.max(devL1?Math.abs(devL1):0, devL2?Math.abs(devL2):0, ...devs);
-    const status = maxDev > 0.010 ? 'GRENZWERTIG' : maxDev > 0.005 ? 'ACHTUNG' : 'OK';
+    const dL1 = (r.ist_l1 && r.nenn_l1) ? round3(r.ist_l1 - r.nenn_l1) : null;
+    const dL2 = (r.ist_l2 && r.nenn_l2) ? round3(r.ist_l2 - r.nenn_l2) : null;
+    const rDevs = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4]
+      .map(v => (v && r.nenn_r) ? Math.abs(round3(v - r.nenn_r)) : 0);
+    const mx = Math.max(dL1?Math.abs(dL1):0, dL2?Math.abs(dL2):0, ...rDevs);
+    const st = mx > 0.010 ? 'GRENZWERTIG' : mx > 0.005 ? 'ACHTUNG' : 'OK';
 
-    body += '──────────────────────────────\n';
-    body += 'Düse #' + r.num + '  [' + status + ']\n';
-    body += 'L1: ' + (r.nenn_l1||'?').toFixed(3) + ' / ' + (r.ist_l1||'?').toFixed(3) + ' mm';
-    if (devL1 !== null) body += '  (Δ' + (devL1>=0?'+':'') + devL1.toFixed(3) + ')';
-    body += '\n';
-    body += 'L2: ' + (r.nenn_l2||'?').toFixed(3) + ' / ' + (r.ist_l2||'?').toFixed(3) + ' mm';
-    if (devL2 !== null) body += '  (Δ' + (devL2>=0?'+':'') + devL2.toFixed(3) + ')';
-    body += '\n';
-    body += 'R (Nenn ' + (r.nenn_r||'?').toFixed(3) + '): ';
-    body += ['R1','R2','R3','R4'].map((n,i) => {
-      const v = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4][i];
-      if (!v) return n+'=—';
-      const d = round3(v - r.nenn_r);
-      return n+'='+v.toFixed(3)+'(Δ'+(d>=0?'+':'')+d.toFixed(3)+')';
-    }).join('  ') + '\n';
-    if (r.notiz) body += 'Notiz: ' + r.notiz + '\n';
-    body += 'Datum: ' + r.datum + '\n';
+    lines.push('Duese #' + r.num + ' [' + st + ']');
+    lines.push('L1: ' + fmt(r.nenn_l1) + ' / ' + fmt(r.ist_l1) + (dL1!==null?' d='+(dL1>=0?'+':'')+dL1.toFixed(3):''));
+    lines.push('L2: ' + fmt(r.nenn_l2) + ' / ' + fmt(r.ist_l2) + (dL2!==null?' d='+(dL2>=0?'+':'')+dL2.toFixed(3):''));
+    const rLine = [r.ist_r1,r.ist_r2,r.ist_r3,r.ist_r4]
+      .map((v,i) => { if(!v) return 'R'+(i+1)+'=?'; const d=round3(v-r.nenn_r); return 'R'+(i+1)+'='+v.toFixed(3)+(d>=0?'+':'')+d.toFixed(3); })
+      .join(' ');
+    lines.push('R('+fmt(r.nenn_r)+'): ' + rLine);
+    if (r.notiz) lines.push('Notiz: ' + r.notiz);
+    lines.push('');
   });
 
-  body += '══════════════════════════════\n';
-  body += 'Hinweis: PDFs wurden beim Speichern automatisch heruntergeladen.\n';
-  body += 'Gerät: Keyence IM 7020';
+  lines.push('PDFs wurden beim Speichern heruntergeladen.');
 
-  const mailto = 'mailto:' + to + '?subject=' + betreff + '&body=' + encodeURIComponent(body);
+  const body = lines.join('%0D%0A');  // pre-encode newlines – most reliable across mail apps
+  const subj = encodeURIComponent(subjText);
+  const mailto = 'mailto:' + to + '?subject=' + subj + '&body=' + body;
 
-  if (mailto.length > 2000) {
-    // Too long for mailto – open without body, show warning
-    showToast('⚠ Zu viele Einträge – E-Mail ohne Text geöffnet', '#e67e22');
-    window.location.href = 'mailto:' + to + '?subject=' + betreff;
-  } else {
-    window.location.href = mailto;
-  }
+  window.location.href = mailto;
+  showToast('Mail-App wird geoeffnet...', '#2d7dd2');
 }
+
+function fmt(v) { return v ? v.toFixed(3) : '?'; }
 
 // ── KEYBOARD NAVIGATION ────────────────────────────────────────────────
 function jumpTo(event, nextId) {
